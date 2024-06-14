@@ -8,13 +8,6 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-model userinfo {
-  id             String  @id @default(uuid())
-  email          String  @unique @db.VarChar(255)
-  hashedpassword String  @db.VarChar(255)
-  username       String? @db.VarChar(255)
-}
-
 model caught {
   pokemonid   Int     @id @default(autoincrement())
   pokemonname String? @db.VarChar(255)
@@ -23,4 +16,11 @@ model caught {
   moves       String? @db.VarChar(255)
   image       String? @db.VarChar(255)
   userpass    String? @db.VarChar(255)
+}
+
+model userinfo {
+  email          String  @unique @db.VarChar(255)
+  hashedpassword String  @db.VarChar(255)
+  username       String? @db.VarChar(255)
+  id             Int     @id @default(autoincrement())
 }
