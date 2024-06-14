@@ -20,7 +20,7 @@ app.use("/*", cors());
 app.use(
   "/protected/*",
   jwt({
-    secret: "mySecretKey",
+    secret: process.env.JWT_SECRET || "mySecretKey",
   })
 );
 
@@ -32,7 +32,7 @@ app.post("/signUp", async (c) => {
   try {
     const body = await c.req.json();
 
-    const bcryptHash = await bcrypt.hash(body.password, 1);
+    const bcryptHash = await bcrypt.hash(body.password, 10);
 
     const user = await prisma.userinfo.create({
       data: {
@@ -52,7 +52,6 @@ app.post("/signUp", async (c) => {
         return c.json({ message: "Email already exists" });
       }
     }
-    // Additional error handling
     console.error(e);
     return c.json({ message: "An error occurred" }, 500);
   }
@@ -68,7 +67,7 @@ app.post("/pokemon", async (c) => {
         pokemontype: body.pokemontype,
         weight: body.weight,
         moves: body.moves,
-        image: body.image
+        image: body.image,
       },
     });
     console.log(pokemon);
@@ -79,66 +78,107 @@ app.post("/pokemon", async (c) => {
         console.log(
           "There is a unique constraint violation, a new user cannot be created with this pokemon name"
         );
-        return c.json({ message: "Pokemon already exist" });
+        return c.json({ message: "Pokemon already exists" });
       }
     }
-    // Additional error handling
     console.error(e);
     return c.json({ message: "An error occurred" }, 500);
   }
 });
 
+app.get('/pokemon/records', async (c) => {
+  try {
+    const pRecords = await prisma.caught.findMany();
+    return c.json(pRecords);
+  } catch (e) {
+    console.error(e);
+    return c.json({ message: "An error occurred while fetching Pokémon records" }, 500);
+  }
+});
+
+app.patch('/pokemon/update', async (c) => {
+  try {
+    const body = await c.req.json();
+
+    const updatedPokemon = await prisma.caught.update({
+      where: {
+        pokemonid : body.pokemonid ,  // Assuming the unique identifier is `id`. Change this if you use a different unique identifier like `pokemonname`.
+      },
+      data: {
+        pokemonname: body.pokemonname,
+        pokemontype: body.pokemontype,
+        weight: body.weight,
+        moves: body.moves,
+        image: body.image,
+      },
+    });
+
+    return c.json({ message: `${updatedPokemon.pokemonname} updated successfully`, pokemon: updatedPokemon });
+  } catch (e) {
+    console.error(e);
+    if (e instanceof Prisma.PrismaClientKnownRequestError) {
+      if (e.code === 'P2025') {
+        // Record to update not found
+        return c.json({ message: 'Pokémon not found' }, 404);
+      }
+    }
+    return c.json({ message: 'An error occurred while updating the Pokémon record' }, 500);
+  }
+});
+
+app.delete('/pokemon/delete', async (c) => {
+  try {
+    const body = await c.req.json();
+
+    // Attempt to delete the Pokemon record
+    const deletedPokemon = await prisma.caught.delete({
+      where: {
+        pokemonid: body.pokemonid,
+      },
+    });
+
+    // Check if a record was deleted
+    if (deletedPokemon) {
+      return c.json({ message: `Pokemon with ID ${body.pokemonid} deleted successfully` });
+    } else {
+      return c.json({ message: `Pokemon with ID ${body.pokemonid} not found` }, 404);
+    }
+
+  } catch (error) {
+    console.error('Error deleting Pokemon:', error);
+    return c.json({ message: 'Failed to delete Pokemon' }, 500);
+  }
+});
+
+
 app.post("/login", async (c) => {
   try {
     const body = await c.req.json();
 
-    const bcryptHash_req = await bcrypt.hash(body.password, 1);
-
-    console.log("usr psd hash", bcryptHash_req);
-    // console.log(typeof(bcryptHash_req))
-
-    const user_password = await prisma.userinfo.findUnique({
+    const user = await prisma.userinfo.findUnique({
       where: { email: body.email },
       select: { id: true, hashedpassword: true },
     });
 
-    console.log("db usr psd hash", user_password);
-    // console.log(typeof(user_password))
-    if (!user_password) {
-      return c.json({ message: "User not found" });
+    if (!user) {
+      return c.json({ message: "User not found" }, 404);
     }
 
-    const response = bcrypt
-      .compare(body.password, user_password.hashedpassword)
-      .then((res) => {
-        console.log("bcrypt compare", res); // return true
-        if (res) {
-          // return c.json({ message: "Login successful" });
-          const payload = {
-            sub: body.email,
-            exp: Math.floor(Date.now() / 1000) + 60 * 60,
-          };
-          const secret = "mySecretKey";
-          const token = sign(payload, secret).then((res) => {
-            console.log("inside",res)
-            return res;
-          }).then((t) => {
-            // return t
-          return c.json({ message: "Login successful", token: t });
-          });
-          console.log("outside",token)
+    const passwordMatch = await bcrypt.compare(body.password, user.hashedpassword);
+    if (!passwordMatch) {
+      throw new HTTPException(401, { message: "Invalid credentials" });
+    }
 
-          return token;
+    const payload = {
+      sub: body.email,
+      exp: Math.floor(Date.now() / 1000) + 60 * 60,
+    };
+    const secret = process.env.JWT_SECRET || "mySecretKey";
+    const token = await sign(payload, secret);
 
-          // return c.json({ message: "Login successful", token: token });
-        } else {
-          throw new HTTPException(401, { message: "Invalid credentials" });
-        }
-      })
-      .catch((err) => console.error(err.message));
-
-    return response;
+    return c.json({ message: "Login successful", token });
   } catch (error) {
+    console.error(error);
     throw new HTTPException(401, { message: "Invalid credentials" });
   }
 });
