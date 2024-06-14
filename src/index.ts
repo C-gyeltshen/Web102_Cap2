@@ -5,18 +5,39 @@ import { PrismaClient, Prisma } from "@prisma/client";
 import { HTTPException } from "hono/http-exception";
 import { decode, sign, verify } from "hono/jwt";
 import { jwt } from "hono/jwt";
-import type { JwtVariables } from "hono/jwt";
 import bcrypt from "bcrypt";
 import { resolve } from "path";
 
 type Variables = JwtVariables;
 
 const prisma = new PrismaClient();
-
 const app = new Hono();
 
+// Rate Limiting Middleware
+function rateLimit(limit: number, interval: number) {
+  const queue: number[] = [];
+
+  return async (context: any, next: any) => {
+    const now = Date.now();
+    queue.push(now);
+
+    while (queue[0] && queue[0] < now - interval) {
+      queue.shift();
+    }
+
+    // Check if queue length exceeds limit and if it exits send the status  HTTP 429 Too Many Requests
+    if (queue.length > limit) {
+      return context.json({ message: "Rate limit exceeded" }, 429);
+    }
+
+    await next();
+  };
+}
+
+// Apply CORS globally
 app.use("/*", cors());
 
+// JWT middleware for protected routes
 app.use(
   "/protected/*",
   jwt({
@@ -24,10 +45,16 @@ app.use(
   })
 );
 
+// Apply rate limiting middleware to specific routes /pokemon endpoints
+const rateLimitMiddleware = rateLimit(10, 1000); // 10 requests per second
+app.use("/pokemon", rateLimitMiddleware);
+
+// HOME ROUT
 app.get("/", (c) => {
   return c.text("Hello Hono!");
 });
 
+// ENDPOINT FOR SIGN UP
 app.post("/signUp", async (c) => {
   try {
     const body = await c.req.json();
@@ -41,8 +68,9 @@ app.post("/signUp", async (c) => {
         username: body.username,
       },
     });
+
     console.log(user);
-    return c.json({ message: `${user.email} created successfully}` });
+    return c.json({ message: `${user.email} created successfully` });
   } catch (e) {
     if (e instanceof Prisma.PrismaClientKnownRequestError) {
       if (e.code === "P2002") {
@@ -57,6 +85,7 @@ app.post("/signUp", async (c) => {
   }
 });
 
+// CREATE NEW RECORD
 app.post("/pokemon", async (c) => {
   try {
     const body = await c.req.json();
@@ -70,8 +99,9 @@ app.post("/pokemon", async (c) => {
         image: body.image,
       },
     });
+
     console.log(pokemon);
-    return c.json({ message: `${pokemon.pokemonname} created successfully}` });
+    return c.json({ message: `${pokemon.pokemonname} created successfully` });
   } catch (e) {
     if (e instanceof Prisma.PrismaClientKnownRequestError) {
       if (e.code === "P2002") {
@@ -86,6 +116,7 @@ app.post("/pokemon", async (c) => {
   }
 });
 
+// RETRIEVE ALL THE POKEMON RECORDS IN DB 
 app.get('/pokemon/records', async (c) => {
   try {
     const pRecords = await prisma.caught.findMany();
@@ -96,13 +127,14 @@ app.get('/pokemon/records', async (c) => {
   }
 });
 
+// UPDATE SPECIFIC POKEMON RECORD 
 app.patch('/pokemon/update', async (c) => {
   try {
     const body = await c.req.json();
 
     const updatedPokemon = await prisma.caught.update({
       where: {
-        pokemonid : body.pokemonid ,  // Assuming the unique identifier is `id`. Change this if you use a different unique identifier like `pokemonname`.
+        pokemonid: body.pokemonid,
       },
       data: {
         pokemonname: body.pokemonname,
@@ -126,6 +158,7 @@ app.patch('/pokemon/update', async (c) => {
   }
 });
 
+// DELETE A PARTICULAR POKEMON RECORD 
 app.delete('/pokemon/delete', async (c) => {
   try {
     const body = await c.req.json();
@@ -150,7 +183,7 @@ app.delete('/pokemon/delete', async (c) => {
   }
 });
 
-
+// ENDPOINT OF USER LOGIN
 app.post("/login", async (c) => {
   try {
     const body = await c.req.json();
@@ -183,6 +216,7 @@ app.post("/login", async (c) => {
   }
 });
 
+// Serve 
 const port = 8080;
 console.log(`Server is running on port ${port}`);
 
