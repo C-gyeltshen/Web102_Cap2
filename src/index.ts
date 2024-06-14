@@ -58,6 +58,36 @@ app.post("/signUp", async (c) => {
   }
 });
 
+app.post("/pokemon", async (c) => {
+  try {
+    const body = await c.req.json();
+
+    const pokemon = await prisma.caught.create({
+      data: {
+        pokemonname: body.pokemonname,
+        pokemontype: body.pokemontype,
+        weight: body.weight,
+        moves: body.moves,
+        image: body.image
+      },
+    });
+    console.log(pokemon);
+    return c.json({ message: `${pokemon.pokemonname} created successfully}` });
+  } catch (e) {
+    if (e instanceof Prisma.PrismaClientKnownRequestError) {
+      if (e.code === "P2002") {
+        console.log(
+          "There is a unique constraint violation, a new user cannot be created with this pokemon name"
+        );
+        return c.json({ message: "Pokemon already exist" });
+      }
+    }
+    // Additional error handling
+    console.error(e);
+    return c.json({ message: "An error occurred" }, 500);
+  }
+});
+
 app.post("/login", async (c) => {
   try {
     const body = await c.req.json();
@@ -113,7 +143,7 @@ app.post("/login", async (c) => {
   }
 });
 
-const port = 3000;
+const port = 8080;
 console.log(`Server is running on port ${port}`);
 
 serve({

@@ -10,7 +10,17 @@ datasource db {
 
 model userinfo {
   id             String  @id @default(uuid())
-  email          String  @db.VarChar(255) @unique
+  email          String  @unique @db.VarChar(255)
   hashedpassword String  @db.VarChar(255)
   username       String? @db.VarChar(255)
+}
+
+model caught {
+  pokemonid   Int     @id @default(autoincrement())
+  pokemonname String? @db.VarChar(255)
+  pokemontype String? @db.VarChar(255)
+  weight      String? @db.VarChar(255)
+  moves       String? @db.VarChar(255)
+  image       String? @db.VarChar(255)
+  userpass    String? @db.VarChar(255)
 }
