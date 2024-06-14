@@ -18,8 +18,8 @@ This API allows users to manage Pokémon records and user information through va
 1. **Clone the repository:**
 
 ```
-git clone <repository-url>
-cd <repository-directory>
+git clone https://github.com/C-gyeltshen/Web102_Cap2.git
+cd my-app
 ```
 
 2. **Install dependencies:**
